@@ -1,0 +1,87 @@
+datasource db {
+  provider = "sqlite"
+  url      = "file:../data/crypto-bot.db"
+}
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+model Source {
+  id        String   @id @default(cuid())
+  type      String   // "twitter" | "telegram"
+  handle    String   // @username or channel ID/username
+  name      String   // display name
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  items     ContentItem[]
+
+  @@unique([type, handle])
+}
+
+model ContentItem {
+  id             String    @id @default(cuid())
+  sourceId       String?
+  source         Source?   @relation(fields: [sourceId], references: [id])
+  externalId     String    @default("") // tweet ID or message ID (for dedup)
+  originalText   String
+  authorName     String    @default("Unknown")
+  sourceUrl      String?
+  mediaFiles     String?   // JSON array of local paths
+  imageUrl       String?   // External image URL (chart, education infographic)
+  crawledAt      DateTime  @default(now())
+
+  // Content classification
+  contentType    String    @default("news")  // "news" | "education" | "market_recap" | "coin_analysis" | "concept" | "chart_pattern"
+  educationTopic String?   // sub-topic for education content
+
+  // Processing pipeline
+  status         String    @default("pending") // pending | processing | rewritten | awaiting_approval | publishing | published | failed | skipped
+  rewrittenText  String?
+  rewrittenTextEn String?  // English version for Twitter EN
+  tweetTextVI    String?   // Short tweet version Vietnamese
+  tweetTextEN    String?   // Short tweet version English
+  twitterStatus  String    @default("pending") // breaking | general | ignore | pending
+  factCheckNote  String?
+  failReason     String?
+  tweetViId      String?   // Tweet ID on Vietnamese account
+  tweetEnId      String?   // Tweet ID on English account
+
+  // Value scoring (0-10) — used to filter low-value news
+  valueScore     Int       @default(0)
+  scoreBreakdown String?   // JSON: {impact, relevance, timeliness, uniqueness, engagement}
+
+  // Approval workflow (used by education / sensitive news)
+  approvalRequired Boolean @default(false)
+  approvedAt       DateTime?
+  approvedBy       String?
+  approvalMsgId    String?  // Telegram message ID of the approval card
+
+  // Scheduling (post at peak hours)
+  scheduledFor   DateTime?
+
+  // Publishing
+  publishedAt    DateTime?
+  publishedMsgId String?
+
+  @@unique([sourceId, externalId])
+  @@index([status])
+  @@index([crawledAt])
+  @@index([contentType])
+  @@index([scheduledFor])
+}
+
+model Setting {
+  key   String @id
+  value String
+}
+
+model Log {
+  id        String   @id @default(cuid())
+  level     String   // info | warn | error
+  module    String
+  message   String
+  createdAt DateTime @default(now())
+
+  @@index([createdAt])
+}

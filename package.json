@@ -1,0 +1,40 @@
+{
+  "name": "crypto-bot",
+  "version": "1.0.0",
+  "description": "Crypto content automation bot: crawl → rewrite → publish",
+  "type": "module",
+  "scripts": {
+    "dev": "tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "auth:telegram": "tsx scripts/telegram-auth.ts",
+    "clean:sources": "tsx scripts/clean-sources.ts"
+  },
+  "dependencies": {
+    "@prisma/client": "^6.19.0",
+    "dotenv": "^16.4.7",
+    "node-telegram-bot-api": "^0.66.0",
+    "openai": "^4.77.0",
+    "telegram": "^2.26.22",
+    "twitter-api-v2": "^1.18.2"
+  },
+  "devDependencies": {
+    "@types/node": "^22.0.0",
+    "@types/node-telegram-bot-api": "^0.64.0",
+    "prisma": "^6.19.0",
+    "tsx": "^4.21.0",
+    "typescript": "^5.9.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "@prisma/engines",
+      "prisma",
+      "esbuild",
+      "bufferutil",
+      "utf-8-validate"
+    ]
+  }
+}
