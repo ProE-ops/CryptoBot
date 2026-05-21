@@ -50,18 +50,18 @@ OUTPUT FORMAT (JSON only):
   "tweetLong": "...",         // 500–900 chars, plain text, full analysis, for Premium
   "hashtags": ["#BTC", "$ETH"],  // 4–6 mix of cashtags + topics
   "headline": "internal one-liner",
-  "imageType": "coin_spotlight" | "market_overview" | "sentiment_gauge" | "funding_heatmap" | "none",
+  "imageType": "coin_spotlight" | "market_overview" | "sentiment_gauge" | "funding_heatmap" | "token_dex" | "none",
   "primaryCoin": "BTC" | null,
   "includeTokenCards": true | false   // true if SHILLED TOKENS section had usable data — bot will append token cards
 }
 
 IMAGE PICKING RULES:
-- One specific established coin focus → "coin_spotlight" + primaryCoin
+- One specific established coin focus (BTC, ETH, SOL, etc.) → "coin_spotlight" + primaryCoin
 - Multi-coin market view → "market_overview"
-- Sentiment angle → "sentiment_gauge"
-- Funding/leverage angle → "funding_heatmap"
-- Newly-launched shilled tokens (alt-chain, low-cap) → "none" (token cards will be appended instead)
-- Pure narrative → "none"
+- Sentiment angle (F&G, fear, euphoria) → "sentiment_gauge"
+- Funding/leverage/OI angle → "funding_heatmap"
+- Post focuses on a SPECIFIC token dropped by KOL (low-cap with CA detected) → "token_dex"
+- Pure narrative without specific focus → "none"
 
 WRITING RULES:
 - Lead with the SHARPEST insight. No filler intro.
@@ -187,7 +187,7 @@ async function callSynthesisAI(ctx: SynthesisContext): Promise<SynthesisOutput> 
     ? parsed.hashtags.filter((t: any) => typeof t === "string" && /^[#$]/.test(t))
     : [];
 
-  const validImageTypes: ImageType[] = ["coin_spotlight", "market_overview", "sentiment_gauge", "funding_heatmap", "none"];
+  const validImageTypes: ImageType[] = ["coin_spotlight", "market_overview", "sentiment_gauge", "funding_heatmap", "token_dex", "none"];
   const imageType: ImageType = validImageTypes.includes(parsed.imageType) ? parsed.imageType : "none";
 
   return {
@@ -273,13 +273,21 @@ export async function synthesizeCycle(): Promise<string | null> {
     return null;
   }
 
-  // Build image URL based on AI hint
+  // Build image URL based on AI hint.
+  // Auto-prefer token_dex if AI chose coin_spotlight but the primaryCoin is actually a low-cap token from our CA detection
+  let imageType = ai.imageType;
+  if (imageType === "coin_spotlight" && ai.primaryCoin && ctx.tokens.length > 0) {
+    const matchedToken = ctx.tokens.find(t => t.symbol.toUpperCase() === ai.primaryCoin!.toUpperCase());
+    if (matchedToken) imageType = "token_dex";  // prefer DexScreener real screenshot over generic chart
+  }
+
   const imageUrl = pickSynthesisImage({
-    imageType: ai.imageType,
+    imageType,
     primaryCoin: ai.primaryCoin,
     topCoins: ctx.topCoins,
     funding: ctx.funding,
     fng: ctx.fng,
+    tokens: ctx.tokens,
   });
 
   // Append token cards to Telegram post if any tokens were analyzed
@@ -328,6 +336,6 @@ export async function synthesizeCycle(): Promise<string | null> {
   });
 
   const tokensTag = ctx.tokens.length > 0 ? ` [${ctx.tokens.length} tokens]` : "";
-  logger.info("synthesizer", `✅ "${ai.headline}" → ${synthesis.id.slice(0, 8)} [img: ${ai.imageType}${ai.primaryCoin ? `/${ai.primaryCoin}` : ""}]${tokensTag}`);
+  logger.info("synthesizer", `✅ "${ai.headline}" → ${synthesis.id.slice(0, 8)} [img: ${imageType}${ai.primaryCoin ? `/${ai.primaryCoin}` : ""}]${tokensTag}`);
   return synthesis.id;
 }

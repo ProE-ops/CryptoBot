@@ -12,6 +12,8 @@
 
 import type { CoinMarketData } from "./market-data.js";
 import type { FundingRateData } from "./derivatives-data.js";
+import { buildTradingViewChart, buildDexscreenerScreenshot, isMajorSymbol, hasChartImg } from "./chart-screenshot.js";
+import type { TokenAnalysis } from "./token-analyzer.js";
 
 const QC_BASE = "https://quickchart.io/chart";
 const BRAND_GREEN = "#16C784";
@@ -218,7 +220,7 @@ export function buildFundingHeatmap(funding: FundingRateData[]): string {
 // ===== DISPATCHER =====
 // Decide which image to build based on AI hint + available data
 
-export type ImageType = "coin_spotlight" | "market_overview" | "sentiment_gauge" | "funding_heatmap" | "none";
+export type ImageType = "coin_spotlight" | "market_overview" | "sentiment_gauge" | "funding_heatmap" | "token_dex" | "none";
 
 export interface ImageBuildContext {
   imageType: ImageType;
@@ -226,20 +228,45 @@ export interface ImageBuildContext {
   topCoins: CoinMarketData[];
   funding: FundingRateData[];
   fng?: { value: number; classification: string };
+  tokens?: TokenAnalysis[];  // for token_dex type — uses highest-liquidity token
 }
 
 /**
- * Picks the best image URL for a synthesis post given the AI hint + available data.
- * Falls back gracefully if requested data is missing.
+ * Picks the best image URL for a synthesis post.
+ * Priority: real chart screenshots (chart-img.com) → QuickChart fallback.
  */
 export function pickSynthesisImage(ctx: ImageBuildContext): string {
   switch (ctx.imageType) {
     case "coin_spotlight": {
-      if (!ctx.primaryCoin) return buildMarketOverview(ctx.topCoins);
-      const coin = ctx.topCoins.find(c => c.symbol.toUpperCase() === ctx.primaryCoin!.toUpperCase());
-      if (!coin || coin.sparkline7d.length === 0) return buildMarketOverview(ctx.topCoins);
-      return buildCoinSpotlight(coin);
+      const primary = ctx.primaryCoin || "";
+
+      // Tier 1: chart-img TradingView for major Binance-listed coins
+      if (hasChartImg() && primary && isMajorSymbol(primary)) {
+        const url = buildTradingViewChart({ symbol: primary, interval: "4h", studies: ["RSI"] });
+        if (url) return url;
+      }
+
+      // Tier 2: QuickChart sparkline from CoinGecko 7d data
+      const coin = ctx.topCoins.find(c => c.symbol.toUpperCase() === primary.toUpperCase());
+      if (coin && coin.sparkline7d.length > 0) return buildCoinSpotlight(coin);
+
+      // Tier 3: fallback to market overview
+      return buildMarketOverview(ctx.topCoins);
     }
+
+    case "token_dex": {
+      // For tokens dropped by KOLs — screenshot the Dexscreener page directly
+      const top = (ctx.tokens || [])
+        .slice()
+        .sort((a, b) => b.liquidityUsd - a.liquidityUsd)[0];
+      if (top && hasChartImg()) {
+        const url = buildDexscreenerScreenshot(top.chain, top.pairAddress);
+        if (url) return url;
+      }
+      // Fallback: market overview if no chart-img key
+      return ctx.topCoins.length > 0 ? buildMarketOverview(ctx.topCoins) : "";
+    }
+
     case "market_overview":
       return ctx.topCoins.length > 0 ? buildMarketOverview(ctx.topCoins) : "";
     case "sentiment_gauge":

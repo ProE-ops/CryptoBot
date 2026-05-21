@@ -42,6 +42,9 @@ export const config = {
   DEEPSEEK_API_KEY: optional("DEEPSEEK_API_KEY"),
   DEEPSEEK_MODEL: optional("DEEPSEEK_MODEL", "deepseek-chat"),
 
+  // chart-img.com — real TradingView/Dexscreener screenshots (optional but recommended for engagement)
+  CHARTIMG_API_KEY: optional("CHARTIMG_API_KEY"),
+
   // Crypto data providers
   CRYPTOPANIC_API_KEY: optional("CRYPTOPANIC_API_KEY"),
   COINGLASS_API_KEY: optional("COINGLASS_API_KEY"),
