@@ -33,6 +33,7 @@
       "@prisma/engines",
       "prisma",
       "esbuild",
+      "es5-ext",
       "bufferutil",
       "utf-8-validate"
     ]

@@ -16,6 +16,7 @@ let twitterTimer: NodeJS.Timeout | null = null;
 let educationTimer: NodeJS.Timeout | null = null;
 let approvalNotifyTimer: NodeJS.Timeout | null = null;
 let approvalExpiryTimer: NodeJS.Timeout | null = null;
+let logCleanupTimer: NodeJS.Timeout | null = null;
 
 // ===== CYCLE WRAPPERS =====
 
@@ -57,6 +58,18 @@ async function approvalNotifyCycle() {
     }
   } catch (err: any) {
     logger.error("scheduler", `Approval notify error: ${err.message}`);
+  }
+}
+
+async function logCleanupCycle() {
+  try {
+    const cutoff = new Date(Date.now() - 24 * 60 * 60 * 1000); // keep last 24h
+    const deleted = await db.log.deleteMany({ where: { createdAt: { lt: cutoff } } });
+    if (deleted.count > 0) {
+      logger.info("scheduler", `🗑️ Pruned ${deleted.count} old log entries`);
+    }
+  } catch (err: any) {
+    console.error(`[log-cleanup] ${err.message}`);
   }
 }
 
@@ -124,6 +137,8 @@ export function startScheduler() {
   educationTimer   = setInterval(educationCycle,     5 * 60 * 1000); // education check every 5 min
   approvalNotifyTimer = setInterval(approvalNotifyCycle, 2 * 60 * 1000);
   approvalExpiryTimer = setInterval(approvalExpiryCycle, 5 * 60 * 1000);
+  logCleanupTimer     = setInterval(logCleanupCycle,    60 * 60 * 1000); // hourly log prune
+  setTimeout(logCleanupCycle, 30_000); // prune once on startup to clear existing bloat
 
   setTimeout(educationCycle, 30_000); // first education check after 30s
 }
@@ -136,8 +151,9 @@ export function stopScheduler() {
   if (educationTimer)    clearInterval(educationTimer);
   if (approvalNotifyTimer) clearInterval(approvalNotifyTimer);
   if (approvalExpiryTimer) clearInterval(approvalExpiryTimer);
+  if (logCleanupTimer)   clearInterval(logCleanupTimer);
   crawlTimer = synthesisTimer = publishTimer = twitterTimer =
-    educationTimer = approvalNotifyTimer = approvalExpiryTimer = null;
+    educationTimer = approvalNotifyTimer = approvalExpiryTimer = logCleanupTimer = null;
   logger.info("scheduler", "Scheduler stopped");
 }
 
